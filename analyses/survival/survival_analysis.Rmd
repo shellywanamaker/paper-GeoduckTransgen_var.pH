@@ -1,0 +1,165 @@
+---
+title: "2016 pteropod survival proportions analysis"
+author: "Shelly Trigg"
+date: "5/6/2019"
+output: rmarkdown::github_document
+---
+
+1. Load libraries
+```{r, load_libraries, echo = FALSE}
+library(readxl)
+library(plyr)
+library(tidyr)
+library(ggplot2)
+library(FSA)
+library(survminer)
+library(survival)
+library(lme4)
+library(lmerTest)
+library(knitr)
+library(coxme)
+library(survMisc)
+library(gridExtra)
+```
+
+2. Read in data
+```{r,read_in_data, echo = TRUE}
+#survival data
+d <- read_xlsx("~/Documents/GitHub/paper-GeoduckBrood_Juvs_pH/data/Brood_Survival/Tank5_6_Broodstock_survival_201811-20190317.xlsx")
+
+d$Date <- as.POSIXct(strptime(d$Date, format = "%Y%m%d"))
+
+stacked_d <- tidyr::gather(d,"Status","# animals", 4:5)
+```
+
+plots of basic pteropod counts in each status category by date and on the last day of the experiment
+```{r}
+jpeg("~/Documents/GitHub/paper-GeoduckBrood_Juvs_pH/analyses/survival/surv_curv.jpg", width = 1800, height = 800, res = 200)
+
+ggplot(stacked_d[which(stacked_d$Status == "live"),]) + geom_line(aes(x = DaysInHatchery, y = `# animals`, color = treatment)) + theme_bw(base_size = 10) + ylab("Number of live animals") + xlab("Days") + scale_x_continuous(breaks = seq(0,100,10),minor_breaks = seq(0,100,2), expand = c(0,0), limits = c(0,100)) 
+  
+
+dev.off()
+```
+
+
+
+
+## SURVIVAL ANALYSIS
+```{r}
+#create a new blank dataset for data to input into survival analysis
+nMoats <- nlevels(STACKED_d$MOATS)
+nJars <- nlevels(STACKED_d$Jar)
+ds <- data.frame(Day = rep(0, (nMoats*nJars)))
+ds$Dead <- 0
+ds$Moats <- NA
+ds$pHtreat <- NA
+ds$DOtreat <- NA
+ds$Treat <- NA
+#View(ds)
+
+#loop to create a dataframe in the format to make a "surv" object for survival analysis
+#the format records the day of events (deaths) and the day the pteropod leave the experiment (either by going missing or the end of the experiment)
+#days are relative to the start of the experiment (i.e. days of exposure; collection day = 0)
+index <- 1
+for(i in 1:nMoats){
+  for(j in 1:nJars){
+    dc <- subset(STACKED_d, MOATS == levels(STACKED_d$MOATS)[i] & Jar == levels(STACKED_d$Jar)[j])
+    dc <- dc[order(dc$Date),]
+    if(dc$Status[1] == "Dead"){
+      ds$Day[index] <- 1
+      ds$Dead[index] <- 1
+    }
+    nDays <- length(dc$Date)
+    for(k in 2:nDays){
+      if(dc$Status[k-1] == "Live" && dc$Status[k] == "Dead"){
+        ds$Day[index] <- k
+        ds$Dead[index] <- 1
+      }
+      if(dc$Status[k-1] == "Live" && dc$Status[k] == "Missing"){
+          ds$Day[index] <- k-1
+          ds$Dead[index] <- 0
+      }
+    }
+    if(dc$Status[nDays] == "Live"){
+      ds$Day[index] <- nDays
+      ds$Dead[index] <- 0
+    }
+    ds$Moats[index] <- as.character(dc$MOATS[1])
+    ds$pHtreat[index] <- dc$pH[1]
+    ds$DOtreat[index] <- dc$DO[1]
+    ds$Treat[index] <- dc$treatment[1]
+    index <- index + 1
+  }
+}
+levels(factor(ds$Moats))
+#View(ds)
+str(ds)
+
+#make treatment variables factors
+ds$Treat <- factor(ds$Treat)
+ds$pHtreat <- factor(ds$pHtreat)
+ds$DOtreat <- factor(ds$DOtreat)
+
+
+#make a surv object to pass into coxme
+
+surv <- Surv(time = ds$Day, event = ds$Dead, type = "right")
+
+```
+
+
+surival plots of simple K-M surivial probabilites; models does in include interaction design or random MOATS term
+```{r, echo = FALSE, eval = FALSE}
+
+jpeg("~/Documents/GitHub/pteropod_pHxDO_metabolomics/survival/2016_pteropod_survival_paul_code_adapted_files/surv_curv.jpg", width = 1800, height = 800, res = 200)
+
+ggsurvplot(survfit(surv ~ Treat, ds), risk.table = FALSE, pval = FALSE, conf.int = TRUE, palette = "npg", break.x.by = 1, xlim = c(1,9) , xlab = "Time (days)") #pH and DO treatments
+
+dev.off()
+
+
+
+```
+
+cox test
+```{r}
+
+
+survFit1 <- coxph(surv ~ pHtreat + DOtreat + pHtreat*DOtreat, ds )
+summary(survFit1)
+
+survFitME <- coxme(surv ~ pHtreat*DOtreat + (1|Moats), ds)
+summary(survFitME)
+
+survFitME1 <- coxme(surv ~ Treat + (1|Moats), ds)
+summary(survFitME1)
+
+#r-squared
+#https://rdrr.io/cran/survMisc/man/rsq.html
+rsq(survFit1, sigD=2)
+
+#pairwise comparisons
+
+library(multcomp)
+
+glht(model = survFitME1, linfct = mcp(Treat = "Dunnett"),alternative = "greater")
+```
+
+
+The standard deviation of the MOATS random effect is very small (0.009) which suggests that MOATS does not really affect the outcome. Also the liklihood ratio test (Chisq) value is the same (13.05), meaning that including MOATS as a random effect does not improve the model. We likely do not need to include it as a random effect. 
+
+**Describing the cox model**
+I based the interpretation off of this article: http://www.sthda.com/english/wiki/cox-proportional-hazards-model
+
+1. Statistical significance. Z = the Wald statistic which evaluates whether the beta coefficient (impact of the covariate) is statistically significantly different from 0. We can conclude that low pH and low DO did not have statistically significant coefficients but their interaction did (p = 0.00117).
+
+2. Regression coefficient ("coef"). A coef < 0 means hazard is lower and > 0 means hazard is higher. So, low pH or low DO treatment led to a lower risk of death (AKA greater survival), but the interaction of low pH and low DO led to greater risk of death (AKA less survival). 
+
+3. Hazard ratio ("exp(coef)"): the effect size of the covariates. Low pH treatment reduced the risk of death by a factor of 0.6697 or ~33%, and low DO treatment reduced the risk of death by a factor of 0.5942 or ~41%. Low pH and low DO treatment increased the risk of death by a factor of 3.3422 or 330%. 
+
+4. confidence intervals of the hazard ratios. So low pH factor reduced risk of death is 0.6697 + 
+
+5. Global statistical significance of the model: p = 0.004528, based on the liklihood ratio test (but also the same p-value when logrank test or wald test is used)
+
+6. Rsquared: coefficient of determination < 0.2 means predictive power is low. Coefficient of determination is not generalized to censored data, so measure of explained randomness or measure of explained variation are more popular. These values are still < 0.2 in this case, so the model has weak predictive power on survival. Reference (https://apha.confex.com/apha/134am/techprogram/paper_135906.htm)
