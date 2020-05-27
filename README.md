@@ -10,8 +10,6 @@ Manuscript repo for geoduck broodstock variable low pH broodstock conditioning e
 - [Issues](https://github.com/shellytrigg/paper-OysterSeed-TimeXTemp/issues)
 - [Citation](#citation)
 
-
-
 ## Experimental Details
 
 ### Broodstock conditioning
@@ -46,7 +44,7 @@ Larvae from both parental histories were reared in ambient conditions for 32 day
 		- [Titrator](https://github.com/shellytrigg/paper-GeoduckTransgen_var.pH/tree/master/data/Water_Chem/Titrator)
 	- [juv_respirometry](https://github.com/shellytrigg/paper-GeoduckTransgen_var.pH/tree/master/data/juv_respirometry/SDR)
 	- [juv_shell_length](https://github.com/shellytrigg/paper-GeoduckTransgen_var.pH/tree/master/data/juv_shell_length) 
-- ### [exp_design]
+- ### [exp_design](https://github.com/shellytrigg/paper-GeoduckTransgen_var.pH/tree/master/exp_design)
 	
 
 ## Citation
