@@ -1,7 +1,16 @@
-# paper-GeoduckBrood_Juvs_pH
+# paper-GeoduckBrood_Juvs\_pH
 Manuscript repo for geoduck broodstock variable low pH broodstock conditioning effect on juvenile stress response 
 
-Manuscript draft here: [https://drive.google.com/open?id=1aIho7R27-cXpDpuRKlQY_p-3Bi7-HlZMNQcTtH_bigI](https://drive.google.com/open?id=1aIho7R27-cXpDpuRKlQY_p-3Bi7-HlZMNQcTtH_bigI)
+**Manuscript draft here:** [https://drive.google.com/open?id=1aIho7R27-cXpDpuRKlQY_p-3Bi7-HlZMNQcTtH_bigI](https://drive.google.com/open?id=1aIho7R27-cXpDpuRKlQY_p-3Bi7-HlZMNQcTtH_bigI)
+
+## Contents
+
+- [Overview](#experimental-details)
+- [Repo Contents](#repo-contents)
+- [Issues](https://github.com/shellytrigg/paper-OysterSeed-TimeXTemp/issues)
+- [Citation](#citation)
+
+
 
 ## Experimental Details
 
@@ -26,3 +35,18 @@ Larvae from both parental histories were reared in ambient conditions for 32 day
 
 - Juveniles from both parental histories that were held under the ambient conditions continued to be reared under ambient conditions for 136 days from 20191018 to 20200303.
 	- size measurements and counts were taken on 20200303
+
+## Repo Contents
+- ### [Analyses](https://github.com/shellytrigg/paper-GeoduckTransgen_var.pH/tree/master/analyses):
+	- [Respirometry]() 
+- ### [Data](https://github.com/shellytrigg/paper-GeoduckTransgen_var.pH/tree/master/data): 
+	- [Brood_Survival](https://github.com/shellytrigg/paper-GeoduckTransgen_var.pH/tree/master/data/Brood_Survival)
+	- [Water_Chem](https://github.com/shellytrigg/paper-GeoduckTransgen_var.pH/tree/master/data/Water_Chem)
+		- [Apex](https://github.com/shellytrigg/paper-GeoduckTransgen_var.pH/tree/master/data/Water_Chem/Apex)
+		- [Titrator](https://github.com/shellytrigg/paper-GeoduckTransgen_var.pH/tree/master/data/Water_Chem/Titrator)
+	- [juv_respirometry](https://github.com/shellytrigg/paper-GeoduckTransgen_var.pH/tree/master/data/juv_respirometry/SDR)
+	- [juv_shell_length](https://github.com/shellytrigg/paper-GeoduckTransgen_var.pH/tree/master/data/juv_shell_length) 
+- ### [exp_design]
+	
+
+## Citation
