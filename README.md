@@ -36,14 +36,16 @@ Larvae from both parental histories were reared in ambient conditions for 32 day
 
 ## Repo Contents
 - ### [Analyses](https://github.com/shellytrigg/paper-GeoduckTransgen_var.pH/tree/master/analyses):
-	- [Respirometry]() 
+	- [brood_survival](https://github.com/shellytrigg/paper-GeoduckTransgen_var.pH/tree/master/analyses/brood_survival)
+	- [juv_shell_length](https://github.com/shellytrigg/paper-GeoduckTransgen_var.pH/tree/master/analyses/juv_shell_length)
+	- [juv_respirometry](https://github.com/shellytrigg/paper-GeoduckTransgen_var.pH/tree/master/analyses/juv_respirometry) 
 - ### [Data](https://github.com/shellytrigg/paper-GeoduckTransgen_var.pH/tree/master/data): 
 	- [Brood_Survival](https://github.com/shellytrigg/paper-GeoduckTransgen_var.pH/tree/master/data/Brood_Survival)
 	- [Water_Chem](https://github.com/shellytrigg/paper-GeoduckTransgen_var.pH/tree/master/data/Water_Chem)
 		- [Apex](https://github.com/shellytrigg/paper-GeoduckTransgen_var.pH/tree/master/data/Water_Chem/Apex)
 		- [Titrator](https://github.com/shellytrigg/paper-GeoduckTransgen_var.pH/tree/master/data/Water_Chem/Titrator)
 	- [juv_respirometry](https://github.com/shellytrigg/paper-GeoduckTransgen_var.pH/tree/master/data/juv_respirometry/SDR)
-	- [juv_shell_length](https://github.com/shellytrigg/paper-GeoduckTransgen_var.pH/tree/master/data/juv_shell_length) 
+	- [juv_shell\_length](https://github.com/shellytrigg/paper-GeoduckTransgen_var.pH/tree/master/data/juv_shell_length) 
 - ### [exp_design](https://github.com/shellytrigg/paper-GeoduckTransgen_var.pH/tree/master/exp_design)
 	
 
