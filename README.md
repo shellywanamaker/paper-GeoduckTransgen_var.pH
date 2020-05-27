@@ -10,7 +10,7 @@ Manuscript repo for geoduck broodstock variable low pH broodstock conditioning e
 - [Issues](https://github.com/shellytrigg/paper-GeoduckBrood_Juvs_pH/issues)
 - [Citation](#citation)
 
-## Experimental Details
+## Overview
 
 ### Broodstock conditioning
 - After being held at ambient conditions for 8 days (20181121-20181129), broodstock were conditioned under ambient and variable low pH conditions (pH 6.8-7.0) for 48 days beginning 20181129 and ending 20190115.
