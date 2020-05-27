@@ -1,0 +1,8 @@
+sample,mass,salinity,Sample.ID,Type,Notes
+20190102_Tank3,59.033,28.2,Tank3,Tank,
+20190102_Tank6,59.349,28.27,Tank6,Tank,
+20190102_Tank1,59.913,28.3,Tank1,Tank,
+20190102_Tank5,59.036,28.32,Tank5,Tank,
+20190102_Tank2,59.422,28.27,Tank2,Tank,
+20190102_Tank4,59.495,28.27,Tank4,Tank,
+,,,,,No replicates for any tanks -KRM 

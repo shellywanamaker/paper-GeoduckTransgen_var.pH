@@ -1,0 +1,411 @@
+---
+title: "Resp.Calculations.ST"
+author: "Shelly Trigg"
+date: "9/30/2019"
+output: rmarkdown::github_document
+---
+
+Load libraries
+```{r}
+## load libraries
+library(readxl)
+library(devtools)
+library(dplyr)
+library(ggplot2)
+library(arm)
+```
+
+Read in and format size and weight data
+```{r}
+Size.Info <- read_xlsx("~/Documents/GitHub/P_generosa/amb_v_varlowpH_juvis/data/Shell_length_data.xlsx") #read Size.info data
+#format date column
+Size.Info$Date <- format(as.POSIXct(strptime(Size.Info$Date, format ="%Y%m%d")),format="%m.%d.%y")
+```
+
+Read in and format cumulative respirometry data
+```{r}
+# call the cumulative resp table of Lolin raw outputs
+cumulative_resp_table <- read.csv(file="~/Documents/GitHub/P_generosa/amb_v_varlowpH_juvis/data/SDR/Cumulative_resp_alpha0.4.csv", header=T, stringsAsFactors = FALSE) #read Size.info data
+#format date column
+cumulative_resp_table$Date <- format(as.POSIXct(cumulative_resp_table$Date,format="%m.%d.%y"),format="%m.%d.%y")
+```
+
+Merge size and weight data with respirometry data
+```{r}
+x <- merge(cumulative_resp_table, Size.Info, by=c("Date","SDR_position", "Run"))
+```
+
+**Analyze blanks** 
+
+```{r}
+#subset respirometry data for blanks data
+blanks_total <- x[which(x$Type == "blank"),]
+#create ID column to distinguish individual data points
+blanks_total$ID <- paste(blanks_total$Date,blanks_total$Run, blanks_total$SDR_position, sep = ".")
+#plot distributions of blank data points and see if any are outliers
+ggplot(blanks_total, aes(x = Date, y = Lpc, color = as.factor(Run))) + geom_point() + theme_bw() + ggtitle("Raw resp. rate in blanks") + ylab("Raw respiration rate (Lpc slope)")
+#see if removing outliers makes a tighter distribution
+#create data frame with mean and standard deviations for each model
+test <- blanks_total %>% group_by(Date,Run,Sw.Condition) %>% summarise(n = n(), mean.lpc = mean(Lpc), mean.leq = mean(Leq), mean.lz = mean(Lz), sd.lpc = sd(Lpc), sd.leq = sd(Leq), sd.lz = sd(Lz))
+#review any groups with large standard deviation
+test
+## runs with SD > 0.1 : 09.05 run 1,run 2, 09.06 run1 var.low, 09.19 run 1 var.low
+#now check plots from Resp.LoLin.ST.R to see if models are weird or if trend is abnormal
+#exclude blanks that seem weird
+blanks_total_filtered <- blanks_total[which(blanks_total$ID != "09.05.19.1.C5" & blanks_total$ID != "09.05.19.1.B5" & blanks_total$ID != "09.05.19.2.B5" & blanks_total$ID != "09.06.19.1.A6" & blanks_total$ID != "09.19.19.1.A1"),]
+#create data frame with mean and standard deviations for each model without weird data points
+avg.blank <- blanks_total_filtered %>% group_by(Date,Run) %>% summarise(n = n(), mean.lpc = mean(Lpc), mean.leq = mean(Leq), mean.lz = mean(Lz), sd.lpc = sd(Lpc), sd.leq = sd(Leq), sd.lz = sd(Lz))
+#review blank averages 
+avg.blank
+#this resolved the SDs > 0.1
+```
+
+**Calculate Respiration Rate**
+```{r}
+#----------------------------Respiration rate calculation -------------------------------------------
+
+#merge respirometry sample data with average blank data
+CALC.table <- merge(avg.blank[,c("Date","Run", "mean.lpc")],x, by=c("Date","Run")) 
+
+#remove lines with NA
+CALC.table <- CALC.table[which(CALC.table$Wet.weight.g != "NA"),]
+
+#convert length and wet weight fields to numeric
+CALC.table$Length <- as.numeric(CALC.table$Length)
+CALC.table$Wet.weight.g <- as.numeric(CALC.table$Wet.weight.g)
+CALC.table$Width <- as.numeric(CALC.table$Width)
+# NOTE: the raw data is in umol L-1 4ml-1
+# "resp.RAW.µgLhr" calculation = ((((((abs(Lpc)) - (BLANK.mean.Lpc))*(4/1000))*(60))*31.998))
+# (1) corrects for blank (2) converts to Liters (3) converts to hours (4) converts moles to grams; final unit = µg O2 L-1 h-1
+
+
+for(i in 1:nrow(CALC.table)) {
+  CALC.table$resp.RAW.µgLhr[i] <-((((((abs(CALC.table[i,"Lpc"])) - (CALC.table[i,"mean.lpc"]))*(4/1000))*(60))*31.998))
+  CALC.table$resp.shell[i] <- CALC.table$resp.RAW.µgLhr[i]/CALC.table[i,"Length"] #per cm shell length
+  CALC.table$resp.weight[i] <- CALC.table$resp.RAW.µgLhr[i]/CALC.table[i,"Wet.weight.g"] #per gram wet weight
+  CALC.table$resp.weightXsize[i] <- CALC.table$resp.RAW.µgLhr[i]/(CALC.table[i,"Wet.weight.g"]* CALC.table[i,"Length"]*CALC.table[i,"Width"])#per gram wet weight*shell length
+}
+
+
+#remove wells with poorly modeled data
+CALC.table$uniqID <- paste(CALC.table$Date,CALC.table$Run, CALC.table$SDR_position, sep = "_")
+CALC.table <- CALC.table[which(CALC.table$uniqID != "09.19.19_1_A6" & CALC.table$uniqID != "09.19.19_1_B3" & CALC.table$uniqID != "09.19.19_1_B4" & CALC.table$uniqID != "09.19.19_1_C3" & CALC.table$uniqID != "10.03.19_1_C4" & CALC.table$uniqID != "10.18.19_1_A6" & CALC.table$uniqID != "10.18.19_1_B4" & CALC.table$uniqID != "10.18.19_2_A3" & CALC.table$uniqID != "10.18.19_3_D1"& CALC.table$uniqID != "10.18.19_3_A1"),]
+
+```
+
+**checking normalization**
+```{r}
+#determine if normalizing by wet weight or length is better
+
+#create a vector for oct 18 data
+resp.data1018 <- CALC.table[which(CALC.table$Date == "10.18.19"),"resp.RAW.µgLhr"]
+
+#calc. correlation
+cor(resp.data1018,CALC.table[which(CALC.table$Date == "10.18.19"),"Wet.weight.g"])
+#plot 
+ggplot(CALC.table[which(CALC.table$Date == "10.18.19"),],aes(x = Wet.weight.g, y = resp.RAW.µgLhr, group = hist.curr.treat, color = hist.curr.treat)) + geom_point()
+
+
+#create a vector for oc 3 data
+resp.data1003 <- CALC.table[which(CALC.table$Date == "10.03.19"),"resp.RAW.µgLhr"]
+
+cor(resp.data1003,CALC.table[which(CALC.table$Date == "10.03.19"),"Wet.weight.g"])
+#plot
+ggplot(CALC.table[which(CALC.table$Date == "10.03.19"),],aes(x = Wet.weight.g, y = resp.RAW.µgLhr, group = hist.curr.treat, color = hist.curr.treat)) + geom_point()
+
+#create a vector for sept. 19 data
+resp.data919 <- CALC.table[which(CALC.table$Date == "09.19.19"),"resp.RAW.µgLhr"]
+
+cor(resp.data919,CALC.table[which(CALC.table$Date == "09.19.19"),"Wet.weight.g"])
+
+#plot
+
+ggplot(CALC.table[which(CALC.table$Date == "09.19.19"),],aes(x = Wet.weight.g, y = resp.RAW.µgLhr, group = hist.curr.treat, color = hist.curr.treat)) + geom_point()
+
+#see if it's one particular group
+cor(CALC.table[which(CALC.table$Date == "09.19.19" & CALC.table$hist.curr.treat == "amb_amb"),"resp.RAW.µgLhr" ],CALC.table[which(CALC.table$Date == "09.19.19"& CALC.table$hist.curr.treat == "amb_amb"),"Wet.weight.g"])
+
+cor(CALC.table[which(CALC.table$Date == "09.19.19" & CALC.table$hist.curr.treat == "amb_var.low"),"resp.RAW.µgLhr" ],CALC.table[which(CALC.table$Date == "09.19.19"& CALC.table$hist.curr.treat == "amb_var.low"),"Wet.weight.g"])
+
+
+cor(CALC.table[which(CALC.table$Date == "09.19.19" & CALC.table$hist.curr.treat == "var.low_amb"),"resp.RAW.µgLhr" ],CALC.table[which(CALC.table$Date == "09.19.19"& CALC.table$hist.curr.treat == "var.low_amb"),"Wet.weight.g"])
+
+cor(CALC.table[which(CALC.table$Date == "09.19.19" & CALC.table$hist.curr.treat == "var.low_var.low"),"resp.RAW.µgLhr" ],CALC.table[which(CALC.table$Date == "09.19.19"& CALC.table$hist.curr.treat == "var.low_var.low"),"Wet.weight.g"])
+
+
+#It seems ambient parental history groups have weird correlations; mainly amb_var.low. but maybe this is ok? it seems small animals are showing high rates. And it seems real for the most part when checking the plate positions and the LoLin models
+```
+
+
+Write out calculated respirometry rates for blanks and for samples
+```{r}
+#----------------------OUTPUT - save plots and cumulative tables-----------------------------------------
+
+write.csv(blanks_total,"~/Documents/GitHub/P_generosa/amb_v_varlowpH_juvis/data/SDR/All.blank.resp.rates.csv", row.names=FALSE, quote = FALSE)
+write.csv(CALC.table,"~/Documents/GitHub/P_generosa/amb_v_varlowpH_juvis/data/SDR/Final.resp.rates.csv", row.names=FALSE, quote = FALSE) 
+```
+
+**plot distribution of raw data per group**
+```{r}
+ggplot(CALC.table) + geom_density(aes(resp.RAW.µgLhr, group = hist.curr.treat, color = hist.curr.treat)) + ggtitle("Distribution of raw resp. data")
+```
+
+**plot distribution of shell length per group**
+```{r}
+ggplot(CALC.table) + geom_density(aes(Length, group = hist.curr.treat, color = hist.curr.treat)) + ggtitle("Distribution of shell length")
+```
+
+**plot distribution of weight per group**
+```{r}
+ggplot(CALC.table) + geom_density(aes(Wet.weight.g, group = hist.curr.treat, color = hist.curr.treat))+ ggtitle("Distribution of weight")
+```
+
+**plot distribution of shell length * weight per group**
+```{r}
+ggplot(CALC.table) + geom_density(aes(Wet.weight.g*Length, group = hist.curr.treat, color = hist.curr.treat))+ ggtitle("Distribution of weight *shell length")
+```
+
+
+**plot distribution of resp norm'd by weight per group**
+```{r}
+ggplot(CALC.table) + geom_density(aes(resp.weight, group = hist.curr.treat, color = hist.curr.treat))+ ggtitle("Distribution of resp.norm.to.weight")
+```
+
+
+
+
+**Boxplots non-normalized data**
+```{r}
+#create a group category
+CALC.table$hist.curr.treat <- paste(CALC.table$Parental.history,CALC.table$Sw.Condition, sep = "_")
+
+ggplot(CALC.table, aes(x = Parental.history,y = resp.RAW.µgLhr, fill = Sw.Condition)) + geom_boxplot() +facet_wrap(~Date) + theme_bw() + ggtitle("Boxplots of non-normalized respirometry data") + ylab("ug O2/L*hr")
+
+```
+
+**Violin plots with boxplot insets and jitter points for non-normalized data**
+```{r}
+ggplot(CALC.table, aes(x = hist.curr.treat,y = resp.RAW.µgLhr, fill = Sw.Condition)) + geom_violin(trim = FALSE) + geom_boxplot(width = 0.15) + geom_jitter(shape =16, size = 2,position= position_jitter(0.05)) +facet_wrap(~Date) + theme_bw() + ggtitle("Non-normalized respirometry data") + ylab("ug O2/L*hr") + xlab("parental_current treatment") + theme(axis.text.x = element_text(angle = 45, hjust = 1))
+```
+
+**anova on non-normalized data on Day 0 (Sept. 5 2019, before treatment started)**
+```{r}
+#run anova for non-normalized data
+#for Sept. 5 trial
+a <- aov(resp.RAW.µgLhr ~ Parental.history, data = CALC.table[which(CALC.table$Date == "09.05.19"),])
+summary(a)
+```
+
+**anova on non-normalized data on Day 1 (Sept. 6 2019)**
+```{r}
+#for Sept. 6 trial
+b <- aov(resp.RAW.µgLhr ~ Sw.Condition*Parental.history, data = CALC.table[which(CALC.table$Date == "09.06.19"),])
+summary(b)
+```
+
+**anova on non-normalized data on Day 14 (Sept. 19 2019)**
+```{r}
+#for Sept. 19 trial 
+c <- aov(resp.RAW.µgLhr ~ Sw.Condition*Parental.history, data = CALC.table[which(CALC.table$Date == "09.19.19"),])
+summary(c)
+```
+
+
+**Boxplots of shell length-normalized data **
+```{r}
+
+ggplot(CALC.table, aes(x = Parental.history,y = resp.shell, fill = Sw.Condition)) + geom_boxplot() +facet_wrap(~Date) + theme_bw() + ggtitle("Shell length-normalized respirometry data") + ylab("ug O2/L*hr*cm.shell.length") 
+```
+
+
+**Violin plots with boxplot insets and jitter points for shell length-normalized data**
+```{r}
+ggplot(CALC.table, aes(x = hist.curr.treat,y = resp.shell, fill = Sw.Condition)) + geom_violin(trim = FALSE) + geom_boxplot(width = 0.15) + geom_jitter(shape =16, size = 2,position= position_jitter(0.05)) +facet_wrap(~Date) + theme_bw() + ggtitle("Respirometry data normalized by shell length") + ylab("ug O2/L*hr*cm.shell.length") + xlab("parental_current treatment") + theme(axis.text.x = element_text(angle = 45, hjust = 1))
+```
+
+**anova on shell length-normalized data on Day 0 (Sept. 5 2019, before treatment started)**
+```{r}
+#run anova for non-normalized data
+#for Sept. 5 trial
+a <- aov(resp.shell ~ Parental.history, data = CALC.table[which(CALC.table$Date == "09.05.19"),])
+summary(a)
+```
+
+**anova on shell length-normalized data on Day 1 (Sept. 6 2019)**
+```{r}
+#for Sept. 6 trial
+b <- aov(resp.shell ~ Sw.Condition*Parental.history, data = CALC.table[which(CALC.table$Date == "09.06.19"),])
+summary(b)
+```
+
+**anova on shell length-normalized data on Day 14 (Sept. 19 2019)**
+```{r}
+#for Sept. 19 trial 
+c <- aov(resp.shell ~ Sw.Condition*Parental.history, data = CALC.table[which(CALC.table$Date == "09.19.19"),])
+summary(c)
+```
+
+**Boxplots of wet weight-normalized data **
+```{r}
+ggplot(CALC.table, aes(x = Parental.history,y = resp.weight, fill = Sw.Condition)) + geom_boxplot() +facet_wrap(~Date) + theme_bw() + ggtitle("Wet weight-normalized respirometry data") + ylab("ug O2/L*hr*gram.wet.weight") 
+```
+
+**Violin plots with boxplot insets and jitter points for wet weight-normalized data**
+```{r}
+ggplot(CALC.table, aes(x = hist.curr.treat,y = resp.weight, fill = Sw.Condition)) + geom_violin(trim = FALSE) + geom_boxplot(width = 0.15) + geom_jitter(shape =16, size = 1,position= position_jitter(0.05)) +facet_wrap(~Date, scale = "free") + theme_bw() + ggtitle("Respirometry data normalized by wet weight") + ylab("ug O2/L*hr*gram.wet.weight") + xlab("parental_current treatment") + theme(axis.text.x = element_text(angle = 45, hjust = 1))
+```
+
+**jitter points for wet weight-normalized data**
+```{r}
+ggplot(CALC.table, aes(x = hist.curr.treat,y = resp.weight, color = hist.curr.treat)) + geom_jitter(shape =16, size = 1,position= position_jitter(0.05)) +facet_wrap(~Date, scale = "free") + theme_bw() + ggtitle("Respirometry data normalized by wet weight") + ylab("ug O2/L*hr*gram.wet.weight") + xlab("parental_current treatment") + theme(axis.text.x = element_text(angle = 45, hjust = 1))
+```
+
+**dot plots for wet weight-normalized resp data over time**
+```{r}
+jpeg("MetabolicRateOverTimeNormToWetWeight.jpg", width = 6,height = 4, units = "in", res = 300)
+ggplot(CALC.table, aes(x = Date,y = resp.weight, color = hist.curr.treat)) + geom_point(position = position_dodge(width = 0.5)) + theme_bw() + ggtitle("Metabolic rate normalized by wet weight") + ylab("ug O2/L*hr*gram.wet.weight") + xlab("Date") + theme(axis.text.x = element_text(angle = 45, hjust = 1))
+dev.off()
+```
+
+**boxplots for wet weight-normalized resp data over time**
+```{r}
+ggplot(CALC.table, aes(x = Date,y = resp.weight, fill = hist.curr.treat)) + geom_boxplot() + theme_bw() + ggtitle("Respirometry data normalized by wet weight") + ylab("ug O2/L*hr*gram.wet.weight") + geom_point(position = position_dodge(width = 0.75)) + xlab("Date") + theme(axis.text.x = element_text(angle = 45, hjust = 1))
+```
+
+**aov of wet weight-normalized resp data over time**
+
+```{r}
+#run anova for non-normalized data
+#for Sept. 5 trial
+resp.wt.3way.aov <- aov(resp.weight ~ Sw.Condition*Parental.history*Date, data = CALC.table[which(CALC.table$Date!="09.05.19"),])
+summary(resp.wt.aov)
+resp.wt.tuk <- TukeyHSD(aov(resp.weight ~ Sw.Condition*Parental.history, data = CALC.table))
+summary(resp.wt.tuk)
+```
+
+**glm**
+```{r}
+#run glm for 10-18
+resp.glm <- glm(resp.weight ~ Parental.history*Sw.Condition, data = CALC.table[which(CALC.table$Date=="10.18.19"),])
+
+pchisq(c(114559-91439,55-52,lower.tail=FALSE))
+
+```
+
+
+**anova on wet weight-normalized data on Day 0 (Sept. 5 2019, before treatment started)**
+```{r}
+#run anova for non-normalized data
+#for Sept. 5 trial
+a <- wilcox.test(resp.weight ~ Parental.history, data = CALC.table[which(CALC.table$Date == "09.05.19"),])
+summary(a)
+```
+
+**anova on wet weight-normalized data on Day 1 (Sept. 6 2019)**
+```{r}
+#for Sept. 6 trial
+b <- aov(resp.weight ~ Sw.Condition*Parental.history, data = CALC.table[which(CALC.table$Date == "09.06.19"),])
+summary(b)
+```
+
+**anova on wet weight-normalized data on Day 14 (Sept. 19 2019)**
+```{r}
+#for Sept. 19 trial 
+c <- aov(resp.weight ~ Sw.Condition*Parental.history, data = CALC.table[which(CALC.table$Date == "09.19.19"),])
+summary(c)
+TukeyHSD(c)
+```
+
+
+**anova on wet weight-normalized data on Day 14 (Oct. 3 2019)**
+```{r}
+#for Sept. 19 trial 
+d <- aov(resp.weight ~ Sw.Condition*Parental.history, data = CALC.table[which(CALC.table$Date == "10.03.19"),])
+summary(d)
+```
+
+**anova on wet weight-normalized data on Day 14 (Oct. 18 2019)**
+```{r}
+#for Sept. 19 trial 
+e <- aov(resp.weight ~ Sw.Condition*Parental.history, data = CALC.table[which(CALC.table$Date == "10.18.19"),])
+summary(e)
+TukeyHSD(e)
+```
+
+plot distribution of respirometry measurments
+```{r}
+ggplot(CALC.table, aes(x = resp.weight, color = hist.curr.treat)) + geom_density() + theme_bw() + ggtitle("Respirometry data normalized by wet weight") + theme(axis.text.x = element_text(angle = 45, hjust = 1))
+```
+it is poisson distributed so run poisson glm on data
+
+```{r}
+g <- glm(resp.weight ~ Parental.history + Sw.Condition + Date, CALC.table, family = poisson(link = "log"))
+
+summary(g)
+```
+all effects are significant, but the deviance is reduced significantly and the residual deviance is much greater than the degress of freedom so overdispersion exists (https://www.dataquest.io/blog/tutorial-poisson-regression-in-r/). 
+
+Try to correct for this using quasi-poisson model:
+```{r}
+h <- glm(resp.weight ~ Parental.history + Sw.Condition +Parental.history + Date, CALC.table, family = quasipoisson(link = "log"))
+
+summary(h)
+
+```
+
+
+compare the models
+```{r}
+coef1 <- coef(g)
+coef2 <- coef(h)
+se.coef1 <- se.coef(g)
+se.coef2 <- se.coef(h)
+models.both <- cbind(coef1, se.coef1, coef2, se.coef2, exponent = exp(coef1))
+```
+
+
+Plotting shell length and wet weight over time
+```{r}
+#convert size data to df
+Size.Info <- data.frame(Size.Info)
+#convert classes to numeric
+Size.Info$Wet.weight.g <- as.numeric(Size.Info$Wet.weight.g)
+Size.Info$Length <- as.numeric(Size.Info$Length)
+#remove lines with NA 
+Size.Info_noNA <- Size.Info[which(Size.Info$Parental.history!= "NA"),]
+
+#plot length x time boxplots
+ggplot(Size.Info_noNA, aes(x = Parental.history, y = Length, fill = Sw.Condition)) + geom_boxplot() + facet_wrap(~Date) + theme_bw() + ggtitle("Shell length over time") + ylab("shell length (cm)")
+
+ggplot(Size.Info_noNA, aes(x = Date, y = Length, color = Parental.history,fill = Sw.Condition)) + geom_boxplot() + theme_bw() + ggtitle("Shell length over time") + ylab("shell length (cm)")
+
+#plot wet.weight x time boxplots
+ggplot(Size.Info_noNA, aes(x = Date, y = Wet.weight.g, color = Parental.history,fill = Sw.Condition)) + geom_boxplot() + theme_bw() + ggtitle("Wet weight over time") + ylab("wet weight (g)")
+
+#get averages for each group and date, then plot 
+
+#create a group variable for combining parental history and sw.condition information
+Size.Info_noNA$group <- paste(Size.Info_noNA$Parental.history,Size.Info_noNA$Sw.Condition, sep = "_")
+
+#create a data frame that contains data grouped by date, parental history, and sw. condition
+test <- group_by(Size.Info_noNA, Date, Parental.history, Sw.Condition)
+
+#For shell length, calculate average, standard deviation, and standard error
+test_mean <- summarize(test, LengthAvg = mean(Length), LengthSD = sd(Length), LengthSE = sd(Length)/(sqrt(n())))
+test_mean$group <- paste(test_mean$Parental.history, test_mean$Sw.Condition, sep = "_")
+
+#set dodge position
+pd <- position_dodge(0.4)
+
+#Plot shell length average over time as dots with error bars
+ggplot(test_mean, aes(x = Date, y = LengthAvg, color = group, group = group)) + geom_point(position = pd) + geom_errorbar(data = test_mean, aes(ymin = LengthAvg-LengthSE, ymax = LengthAvg+LengthSE), width = 0.1, position = pd, linetype = "dashed") + geom_line(position = pd) + theme_bw()+ ylab("mean shell length (cm)") +labs(color = "history_treatment", title ="mean shell length over time (error bars = SE)" )
+
+#For wet weight, calculate average, standard deviation, and standard error
+test_Wtmean <- summarize(test, WtAvg = mean(Wet.weight.g, na.rm = TRUE), WtSD = sd(Wet.weight.g, na.rm = TRUE), WtSE = sd(Wet.weight.g, na.rm = TRUE)/(sqrt(n())))
+
+#For wet weight data, create a group variable for combining parental history and sw.condition information
+test_Wtmean$group <- paste(test_Wtmean$Parental.history, test_Wtmean$Sw.Condition, sep = "_")
+
+#Plot wet weight average over time as dots with error bars
+ggplot(test_Wtmean, aes(x = Date, y = WtAvg, color = group, group = group)) + geom_point(position = pd) + geom_errorbar(data = test_Wtmean, aes(ymin = WtAvg-WtSE, ymax = WtAvg+WtSE), width = 0.1, position = pd, linetype = "dashed") + geom_line(position = pd) + theme_bw() + ylab("mean wet weight (g)") + labs(color = "history_treatment", title ="mean wet weight over time (error bars = SE)" )
+```

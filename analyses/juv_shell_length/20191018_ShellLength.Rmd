@@ -1,0 +1,82 @@
+---
+title: "Oct 18 Shell Length Analysis"
+author: "Shelly Trigg"
+date: "11/12/2019"
+output: html_document
+---
+
+load libraries
+```{r}
+#install.packages("readxl")
+library(readxl)
+#install.packages("ggplot2")
+library(ggplot2)
+
+
+
+```
+
+
+read in and format data
+```{r}
+# read in shell length data from Oct 18
+fileName <- "20191018_ShellLength.xlsx"
+#code from: https://stackoverflow.com/questions/12945687/read-all-worksheets-in-an-excel-workbook-into-an-r-list-with-data-frames
+#define the function for reading in the excel file with multiple tabs
+read_excel_allsheets <- function(fileName, tibble = FALSE) {
+  sheets <- readxl::excel_sheets(fileName)
+  x <- lapply(sheets, function(X) readxl::read_excel(fileName, sheet = X))
+  if(!tibble) x <- lapply(x, as.data.frame)
+  names(x) <- sheets
+  x
+}
+# create R object for excel file 
+sheets <- read_excel_allsheets("20191018_ShellLength.xlsx")
+list2env(sheets ,.GlobalEnv)
+#create data frame from excel datafile
+dt <- data.frame()
+for(i in 1:length(sheets)){
+  dtemp <- data.frame(sheets[i])
+  dtemp$Image <- names(sheets)[i]
+  colnames(dtemp) <- c("Area","Mean", "Min", "Max", "Angle", "Length (inch)", "Length (cm)", "Image")
+  dt <- rbind(dt, dtemp)
+}
+# add Silo Information 
+dt$Silo <- gsub(".*_","",dt$Image)
+
+
+#Read in the parental history and treatment conditions
+meta_data <- read_excel("Fall2019_AmbxVar.Low_juv_MetaData.xlsx")
+colnames(meta_data)[1] <- "Silo"
+dt <- merge(dt,meta_data, by = "Silo")
+dt$parental_currenttreatment <- paste(dt$Parental.history,dt$Sw.Condition,sep = "_")
+
+#change column name so there aren't problems
+colnames(dt)[8] <- "Length.cm"
+```
+
+
+run ANOVA on shell length data
+```{r}
+# test code - seeing if Sw.Condition and Parental.history have an affect on length 
+a <- aov(Length.cm ~ Sw.Condition*Parental.history, data = dt)
+summary(a)
+```
+
+run Tukey's
+```{r}
+# comparing each combination, and seeing which combination is significantly different 
+a_tuk <- TukeyHSD(aov(Length.cm ~ Sw.Condition*Parental.history, data = dt))
+a_tuk
+```
+
+plot distributions of shell length per experimental group
+```{r}
+ggplot(dt) + geom_density(aes(Length.cm, group = parental_currenttreatment, color = parental_currenttreatment, fill = parental_currenttreatment), alpha = 0.2) + theme_bw() + ggtitle("Size Distribution of Juvenile Geoduck Treatment Groups")
+
+
+jpeg("Density Plot of Experimental Groups.jpeg", width = 8, height = 8, units = "in", res = 300)
+# plot density graph
+ggplot(dt) + geom_density(aes(Length.cm, group = parental_currenttreatment, color = parental_currenttreatment, fill = parental_currenttreatment), alpha = 0.2) + theme_bw() + ggtitle("Size Distribution of Juvenile Geoduck Treatment Groups")
+dev.off()
+```
