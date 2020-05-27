@@ -7,7 +7,7 @@ Manuscript repo for geoduck broodstock variable low pH broodstock conditioning e
 
 - [Overview](#experimental-details)
 - [Repo Contents](#repo-contents)
-- [Issues](https://github.com/shellytrigg/paper-OysterSeed-TimeXTemp/issues)
+- [Issues](https://github.com/shellytrigg/paper-GeoduckBrood_Juvs_pH/issues)
 - [Citation](#citation)
 
 ## Experimental Details
