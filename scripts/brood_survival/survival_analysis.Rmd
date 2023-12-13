@@ -94,6 +94,7 @@ surv_plot<-df%>%
   xlab("Date \nDays Relative to Conditioning")+
   geom_text(label="Conditioning Period", x=4, y=1, colour="black", size=4)+
   ylim(0,1)+
+  ggtitle("Broodstock Survival")+
   
   scale_x_discrete(guide = "axis_nested") +
   theme_classic()+
@@ -104,7 +105,7 @@ surv_plot<-df%>%
     legend.position="top"
   ); surv_plot
 
-ggsave(filename="figures/brood_survival/survival_time.png", surv_plot, width=10, height=6)
+ggsave(filename="figures/brood_survival/broodstock_survival.png", surv_plot, width=10, height=6)
 ```
 
 
