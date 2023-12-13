@@ -14,7 +14,7 @@ editor_options:
   chunk_output_type: console
 ---
 
-This script analyzes brood survival. 
+This script analyzes broodstock survival. 
 
 # Set up 
 

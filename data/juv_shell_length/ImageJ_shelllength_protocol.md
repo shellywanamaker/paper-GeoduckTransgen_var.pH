@@ -44,3 +44,4 @@ For each image:
 		b. Select Add to overlay checkbox
 		c. Click ok
 		d. Now, once an animal is measured, a number will pop up where the measurement was placed, which corresponds with the measurement information for that specific animal. 
+ 

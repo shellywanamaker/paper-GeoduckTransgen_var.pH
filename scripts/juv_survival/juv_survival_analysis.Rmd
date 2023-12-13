@@ -1,0 +1,260 @@
+---
+title: "Juvenile Suvival Analysis (Oct 18)"
+author: "Shelly Trigg, modified by Ariana Huffmyer"
+date: "12/13/2023"
+output:
+  html_document:
+    code_folding: hide
+    toc: yes
+    toc_depth: 6
+    toc_float: yes
+  pdf_document:
+    keep_tex: yes
+editor_options: 
+  chunk_output_type: console
+---
+
+This script analyzes juvenile survival.
+
+# Set up 
+
+Load libraries
+```{r}
+library(readxl)
+library(ggplot2)
+library(tidyverse)
+library(readxl)
+library(cowplot)
+library(emmeans)
+```
+
+# Survival data from counting (Steven)
+
+Read in data 
+```{r}
+counts<-read_xlsx("data/juv_survival/20191018_survival.xlsx")%>%select(!`percent.survival(init. 98animals/silo)`)
+metadata<-read_xlsx("data/juv_survival/juv_metadata.xlsx")%>%rename(silo=Tank.ID, parental.history=Parental.history, sw.condition=Sw.Condition)
+
+counts$starting.animals<-98
+```
+
+Calculate percent survival as number of alive animals/number of initial animals. 
+```{r}
+counts$prop_surv<-counts$avg.count/counts$starting.animals
+```
+
+Create a code for treatment. 
+```{r}
+counts$code<-paste0(counts$parental.history, "-", counts$sw.condition) 
+```
+
+# Survival data from images 
+
+```{r}
+fileName <- "data/juv_shell_length/20191018_ShellLength.xlsx"
+#code from: https://stackoverflow.com/questions/12945687/read-all-worksheets-in-an-excel-workbook-into-an-r-list-with-data-frames
+#define the function for reading in the excel file with multiple tabs
+read_excel_allsheets <- function(fileName, tibble = FALSE) {
+  sheets <- readxl::excel_sheets(fileName)
+  x <- lapply(sheets, function(X) readxl::read_excel(fileName, sheet = X))
+  if(!tibble) x <- lapply(x, as.data.frame)
+  names(x) <- sheets
+  x
+}
+# create R object for excel file 
+sheets <- read_excel_allsheets("data/juv_shell_length/20191018_ShellLength.xlsx")
+list2env(sheets ,.GlobalEnv)
+#create data frame from excel datafile
+dt <- data.frame()
+for(i in 1:length(sheets)){
+  dtemp <- data.frame(sheets[i])
+  dtemp$Image <- names(sheets)[i]
+  colnames(dtemp) <- c("Area","Mean", "Min", "Max", "Angle", "Length (inch)", "Length (cm)", "Image")
+  dt <- rbind(dt, dtemp)
+}
+
+# add Silo Information 
+dt$Silo <- gsub(".*_","",dt$Image)
+
+#Read in the parental history and treatment conditions
+meta_data <- read_excel("data/juv_survival/juv_metadata.xlsx")
+
+#change column name to match that in dt
+colnames(meta_data)[1] <- "Silo"
+
+#merge dt data with meta data
+dt <- merge(dt,meta_data, by = "Silo")
+
+#create a new column with parental history and current treatment info
+dt$code <- paste(dt$Parental.history, dt$Sw.Condition,sep = "-")
+
+dt<-dt%>%
+  rename(parental.history=Parental.history, sw.condition=Sw.Condition, silo=Silo)
+
+meta_data<-meta_data%>%
+  rename(silo=Silo, parental.history=Parental.history, sw.condition=Sw.Condition)
+
+head(dt)
+```
+
+Create data frame with final counts from images
+```{r}
+img_counts <- data.frame(table(dt$silo))
+colnames(img_counts) <- c("silo", "live.animals")
+img_counts <- merge(img_counts, meta_data, by = "silo")
+img_counts$code <- paste0(img_counts$parental.history, "-", img_counts$sw.condition)
+```
+
+Add starting number of animals
+```{r}
+img_counts$starting.animals<-98
+```
+
+Calculate proportion survival
+```{r}
+img_counts$prop_surv<-img_counts$live.animals/img_counts$starting.animals
+```
+
+# Plot survival as reaction norms
+
+Plot survival from count data
+
+```{r}
+surv_plot1<-counts%>%
+  
+  ggplot(aes(x=sw.condition, group=interaction(sw.condition, parental.history), y=prop_surv, colour=parental.history))+
+  
+  geom_boxplot(linewidth=1, outlier.shape = NA)+
+  geom_point(size=3, position=position_jitterdodge(0.1))+
+  
+  scale_colour_manual(values=c("lightblue", "orange"), name="Parental Treatment", labels=c("Ambient pH", "Variable Low pH"))+
+  ylab("Proportion Survival")+
+  xlab("Juvenile Condition")+
+  scale_x_discrete(labels=c("Ambient pH", "Variable Low pH"))+
+  ylim(0,1.5)+
+  ggtitle("Juvenile Survival - Counts")+
+  
+  theme_classic()+
+  theme(
+    text=element_text(size=12, colour="black"),
+    axis.title=element_text(size=12, colour="black", face="bold"), 
+    legend.title=element_text(size=12, colour="black", face="bold"), 
+    legend.position="none"
+  ); surv_plot1
+
+surv_plot1a<-counts%>%
+  group_by(sw.condition, parental.history)%>%
+  summarize(mean=mean(prop_surv, na.rm=TRUE), se=sd(prop_surv, na.rm=TRUE)/sqrt(length(prop_surv)))%>%
+  
+  ggplot(aes(x=sw.condition, group=interaction(sw.condition, parental.history), y=mean, colour=parental.history))+
+  
+  geom_point(size=3, position=position_dodge(0.1))+
+  geom_errorbar(aes(ymin=mean-se, ymax=mean+se), position=position_dodge(0.1), width=0)+
+  geom_line(aes(group=parental.history), size=1, position=position_dodge(0.1))+
+  
+  scale_colour_manual(values=c("lightblue", "orange"), name="Parental Treatment", labels=c("Ambient pH", "Variable Low pH"))+
+  ylab("Proportion Survival")+
+  xlab("Juvenile Condition")+
+  scale_x_discrete(labels=c("Ambient pH", "Variable Low pH"))+
+  ylim(0,1.5)+
+  ggtitle("Juvenile Survival - Counts")+
+  
+  theme_classic()+
+  theme(
+    text=element_text(size=12, colour="black"),
+    axis.title=element_text(size=12, colour="black", face="bold"), 
+    legend.title=element_text(size=12, colour="black", face="bold"), 
+    legend.position="right"
+  ); surv_plot1a
+
+surv_grid<-plot_grid(surv_plot1, surv_plot1a, ncol=2, nrow=1, rel_widths=c(0.8,1))
+
+ggsave(filename="figures/juv_survival/juv_survival_counts.png", surv_grid, width=10, height=6)
+```
+
+Plot survival from image data 
+```{r}
+surv_plot2<-img_counts%>%
+  
+  ggplot(aes(x=sw.condition, group=interaction(sw.condition, parental.history), y=prop_surv, colour=parental.history))+
+  
+  geom_boxplot(linewidth=1, outlier.shape = NA)+
+  geom_point(size=3, position=position_jitterdodge(0.1))+
+  
+  scale_colour_manual(values=c("lightblue", "orange"), name="Parental Treatment", labels=c("Ambient pH", "Variable Low pH"))+
+  ylab("Proportion Survival")+
+  xlab("Juvenile Condition")+
+  scale_x_discrete(labels=c("Ambient pH", "Variable Low pH"))+
+  ylim(0,1.5)+
+  ggtitle("Juvenile Survival - Images")+
+  
+  theme_classic()+
+  theme(
+    text=element_text(size=12, colour="black"),
+    axis.title=element_text(size=12, colour="black", face="bold"), 
+    legend.title=element_text(size=12, colour="black", face="bold"), 
+    legend.position="none"
+  ); surv_plot2
+
+surv_plot2a<-img_counts%>%
+  group_by(sw.condition, parental.history)%>%
+  summarize(mean=mean(prop_surv, na.rm=TRUE), se=sd(prop_surv, na.rm=TRUE)/sqrt(length(prop_surv)))%>%
+  
+  ggplot(aes(x=sw.condition, group=interaction(sw.condition, parental.history), y=mean, colour=parental.history))+
+  
+  geom_point(size=3, position=position_dodge(0.1))+
+  geom_errorbar(aes(ymin=mean-se, ymax=mean+se), position=position_dodge(0.1), width=0)+
+  geom_line(aes(group=parental.history), size=1, position=position_dodge(0.1))+
+  
+  scale_colour_manual(values=c("lightblue", "orange"), name="Parental Treatment", labels=c("Ambient pH", "Variable Low pH"))+
+  ylab("Proportion Survival")+
+  xlab("Juvenile Condition")+
+  scale_x_discrete(labels=c("Ambient pH", "Variable Low pH"))+
+  ylim(0,1.5)+
+  ggtitle("Juvenile Survival - Images")+
+  
+  theme_classic()+
+  theme(
+    text=element_text(size=12, colour="black"),
+    axis.title=element_text(size=12, colour="black", face="bold"), 
+    legend.title=element_text(size=12, colour="black", face="bold"), 
+    legend.position="right"
+  ); surv_plot2a
+
+surv_grid2<-plot_grid(surv_plot2, surv_plot2a, ncol=2, nrow=1, rel_widths=c(0.8,1))
+
+ggsave(filename="figures/juv_survival/juv_survival_images.png", surv_grid2, width=10, height=6)
+```
+
+# ANOVA on survival 
+
+Run ANOVA on count data 
+
+```{r}
+model1<- aov(prop_surv ~ parental.history * sw.condition, data = counts)
+summary(model1)
+
+emm<-emmeans(model1, ~parental.history)
+pairs(emm)
+
+emm<-emmeans(model1, ~sw.condition)
+pairs(emm)
+
+emm<-emmeans(model1, ~parental.history | sw.condition)
+pairs(emm)
+```
+Parental condition and juvenile condition are significant in count data. Posthoc shows no difference in parental treatment at ambient pH juvenile treatment. But the variable low pH parental treatment are lower under variable low pH juvenile treatment. Overall, parental ambient treatment is higher than exposed parent treatment. Ambient juvenile treatment is higher than exposed juvenile treatment. 
+
+Run ANOVA on image data 
+
+```{r}
+model2<- aov(prop_surv ~ parental.history * sw.condition, data = img_counts)
+summary(model2)
+
+emm<-emmeans(model2, ~parental.history)
+pairs(emm)
+
+emm<-emmeans(model2, ~sw.condition)
+pairs(emm)
+```
+Ambient parental condition is higher than exposed. Ambient juvenile condition is also higher than exposed. 
